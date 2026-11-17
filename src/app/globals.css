@@ -1,5 +1,17 @@
 @import "tailwindcss";
 @import "./club.css";
+/* Tipografías de los diseños de la tarjeta (el navegador baja solo la que se usa). */
+@import "@fontsource/caveat/latin-500.css";
+@import "@fontsource/caveat/latin-700.css";
+@import "@fontsource/anton/latin-400.css";
+@import "@fontsource/space-mono/latin-400.css";
+@import "@fontsource/space-mono/latin-700.css";
+@import "@fontsource/playfair-display/latin-400.css";
+@import "@fontsource/playfair-display/latin-700.css";
+@import "@fontsource/playfair-display/latin-900.css";
+@import "@fontsource/playfair-display/latin-400-italic.css";
+@import "@fontsource/playfair-display/latin-700-italic.css";
+@import "@fontsource/playfair-display/latin-900-italic.css";
 
 @theme {
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;

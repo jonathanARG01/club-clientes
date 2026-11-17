@@ -29,7 +29,18 @@ const TEXTO_ORIGEN: Record<string, string> = {
   premio: "Canjeaste un premio",
   cupon: "Usaste un cupón",
   reto: "Reto logrado 🏅",
+  saldo: "Usaste tu saldo",
 };
+
+const CARAS = [
+  { nota: 1, cara: "😞", texto: "Mal" },
+  { nota: 2, cara: "🙁", texto: "Regular" },
+  { nota: 3, cara: "😐", texto: "Normal" },
+  { nota: 4, cara: "🙂", texto: "Bien" },
+  { nota: 5, cara: "😍", texto: "¡Excelente!" },
+];
+
+type EventoInstalar = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
 
 export function TarjetaCliente({ inicial, googleWallet }: { inicial: TarjetaPublica; googleWallet: boolean }) {
   const supabase = useMemo(() => createClient(), []);
@@ -57,6 +68,60 @@ export function TarjetaCliente({ inicial, googleWallet }: { inicial: TarjetaPubl
       setResenaVista(false);
     }
   }, [t.negocio.slug]);
+  // Encuesta de un toque después de la visita (una por visita; la base decide si toca).
+  const [encuesta, setEncuesta] = useState<"no" | "pregunta" | "comentario" | "gracias">("no");
+  const [nota, setNota] = useState(0);
+  const [comentario, setComentario] = useState("");
+  const revisarEncuesta = useCallback(async () => {
+    const { data } = await supabase.rpc("encuesta_pendiente", { p_codigo: t.codigo });
+    if (data === true) setEncuesta((e) => (e === "no" ? "pregunta" : e));
+  }, [supabase, t.codigo]);
+  async function responder(n: number) {
+    setNota(n);
+    const { error } = await supabase.rpc("responder_encuesta", { p_codigo: t.codigo, p_nota: n });
+    if (error) {
+      setEncuesta("no");
+      return setAviso({ tipo: "error", texto: mensajeError(error) });
+    }
+    setEncuesta(n <= 3 ? "comentario" : "gracias");
+    setPedirResena(true);
+  }
+  async function enviarComentario() {
+    if (comentario.trim()) await supabase.rpc("comentar_encuesta", { p_codigo: t.codigo, p_comentario: comentario });
+    setEncuesta("gracias");
+  }
+
+  // La tarjeta como app en la pantalla de inicio, con el nombre y el logo del negocio.
+  const [instalar, setInstalar] = useState<EventoInstalar | null>(null);
+  const [instalada, setInstalada] = useState(true);
+  useEffect(() => {
+    setInstalada(
+      (navigator as Navigator & { standalone?: boolean }).standalone === true || matchMedia("(display-mode: standalone)").matches,
+    );
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+    const alPoder = (e: Event) => {
+      e.preventDefault();
+      setInstalar(e as EventoInstalar);
+    };
+    const alInstalar = () => {
+      setInstalar(null);
+      setInstalada(true);
+    };
+    window.addEventListener("beforeinstallprompt", alPoder);
+    window.addEventListener("appinstalled", alInstalar);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", alPoder);
+      window.removeEventListener("appinstalled", alInstalar);
+    };
+  }, []);
+  async function instalarApp() {
+    if (!instalar) return;
+    await instalar.prompt();
+    const { outcome } = await instalar.userChoice;
+    if (outcome === "accepted") setInstalada(true);
+    setInstalar(null);
+  }
+
   function marcarResena() {
     setResenaVista(true);
     try {
@@ -96,6 +161,7 @@ export function TarjetaCliente({ inicial, googleWallet }: { inicial: TarjetaPubl
       setPedirResena(true);
       await recargar();
       avisarTarjeta(t.codigo);
+      revisarEncuesta();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -112,6 +178,7 @@ export function TarjetaCliente({ inicial, googleWallet }: { inicial: TarjetaPubl
   }, [recargar]);
 
   useEffect(() => {
+    if (!query.get("sello")) revisarEncuesta();
     if (iphoneSinInstalar()) setAvisos("iphone");
     else if (soportaPush()) setAvisos(Notification.permission === "granted" && t.acepta_avisos ? "si" : "puede");
     // ¿Lo está mirando alguien del equipo del negocio? Entonces puede sumar sellos o canjear desde aquí.
@@ -247,7 +314,58 @@ export function TarjetaCliente({ inicial, googleWallet }: { inicial: TarjetaPubl
           </p>
         )}
 
-        {pedirResena && !resenaVista && t.negocio.resena_url && (
+        {encuesta === "pregunta" && (
+          <section className="tarjeta w-full p-4 text-center">
+            <p className="font-semibold">¿Cómo te fue hoy en {t.negocio.nombre}?</p>
+            <p className="text-sm text-suave">Un toque y listo.</p>
+            <div className="mt-3 flex justify-center gap-1.5">
+              {CARAS.map((c) => (
+                <button
+                  key={c.nota}
+                  type="button"
+                  onClick={() => responder(c.nota)}
+                  aria-label={c.texto}
+                  title={c.texto}
+                  className="flex h-12 w-12 items-center justify-center rounded-full bg-stone-100 text-2xl transition hover:scale-110 hover:bg-stone-200"
+                >
+                  {c.cara}
+                </button>
+              ))}
+            </div>
+            <button type="button" className="mt-2 text-xs text-suave" onClick={() => setEncuesta("no")}>
+              Ahora no
+            </button>
+          </section>
+        )}
+        {encuesta === "comentario" && (
+          <section className="tarjeta w-full space-y-2 p-4 text-center">
+            <p className="font-semibold">Gracias por contarnos {CARAS[nota - 1]?.cara}</p>
+            <p className="text-sm text-suave">¿Qué podemos hacer mejor? Lo lee solo el equipo de {t.negocio.nombre}.</p>
+            <textarea
+              rows={3}
+              maxLength={300}
+              value={comentario}
+              onChange={(e) => setComentario(e.target.value)}
+              className="campo resize-none text-left"
+              placeholder="Opcional"
+            />
+            <div className="flex justify-center gap-2">
+              <button type="button" className="boton" onClick={enviarComentario}>
+                Enviar
+              </button>
+              <button type="button" className="boton-secundario" onClick={() => setEncuesta("gracias")}>
+                Omitir
+              </button>
+            </div>
+          </section>
+        )}
+        {encuesta === "gracias" && (resenaVista || !t.negocio.resena_url) && (
+          <p className="w-full rounded-xl bg-emerald-100 px-4 py-3 text-center text-sm font-medium text-emerald-900">
+            ¡Gracias por tu opinión! Nos ayuda a mejorar.
+          </p>
+        )}
+
+        {pedirResena && !resenaVista && t.negocio.resena_url && encuesta !== "pregunta" && encuesta !== "comentario" && (
           <section className="tarjeta w-full p-4 text-center">
             <p className="text-2xl" aria-hidden>
               ⭐⭐⭐⭐⭐
@@ -539,9 +657,15 @@ export function TarjetaCliente({ inicial, googleWallet }: { inicial: TarjetaPubl
             </button>
           )}
           {avisos === "si" && <p className="text-center text-xs text-emerald-700">Avisos activados en este celular.</p>}
+          {instalar && !instalada && (
+            <button type="button" className="boton-secundario w-full" onClick={instalarApp}>
+              📲 Instalar la app de {t.negocio.nombre}
+            </button>
+          )}
           {avisos === "iphone" && (
             <p className="tarjeta px-4 py-3 text-xs text-suave">
-              En iPhone: toca <b>Compartir</b> y luego <b>Agregar a inicio</b> para tener tu tarjeta a mano y recibir avisos.
+              En iPhone: toca <b>Compartir</b> y luego <b>Agregar a inicio</b> para tener la app de {t.negocio.nombre} a mano y
+              recibir avisos.
             </p>
           )}
           {t.negocio.instagram && (

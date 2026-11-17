@@ -12,6 +12,9 @@ import { Escaner } from "./Escaner";
 import { avisarTarjeta } from "@/lib/cliente";
 import {
   COLUMNAS_TARJETA,
+  ESTADOS_CLIENTE,
+  ORDEN_ESTADOS,
+  type EstadoCliente,
   codigoDeEscaneo,
   rutaTarjeta,
   textoRegla,
@@ -44,6 +47,8 @@ export function Tarjetas({
   pidePin,
   iniciales,
   extras,
+  estados: estadosIniciales = {},
+  opinionesSinLeer = 0,
 }: {
   negocio: Negocio;
   programa: ProgramaSellos;
@@ -51,6 +56,10 @@ export function Tarjetas({
   pidePin: boolean;
   iniciales: FilaTarjeta[];
   extras: ExtrasFicha;
+  // Estado de cada cliente (VIP, frecuente, en riesgo…) por id de tarjeta.
+  estados?: Record<string, EstadoCliente>;
+  // Opiniones bajas que el dueño todavía no revisa (solo dueño o encargado).
+  opinionesSinLeer?: number;
 }) {
   const puntos = programa.tipo === "puntos";
   const minimoCatalogo = Math.min(...extras.catalogo.filter((r) => r.activo).map((r) => r.puntos), Infinity);
@@ -59,6 +68,16 @@ export function Tarjetas({
   const [lista, setLista] = useState(iniciales);
   const [q, setQ] = useState("");
   const [filtro, setFiltro] = useState<Filtro>("todas");
+  const [estado, setEstado] = useState<EstadoCliente | "">("");
+  const [estados, setEstados] = useState(estadosIniciales);
+  const cuentaEstados = useMemo(() => {
+    const c: Partial<Record<EstadoCliente, number>> = {};
+    for (const t of lista) {
+      const e = estados[t.id];
+      if (e) c[e] = (c[e] ?? 0) + 1;
+    }
+    return c;
+  }, [lista, estados]);
   const [elegida, setElegida] = useState<FilaTarjeta | null>(null);
   const [escaneando, setEscaneando] = useState(false);
   const [nuevo, setNuevo] = useState(false);
@@ -73,6 +92,8 @@ export function Tarjetas({
       .order("ultima_at", { ascending: false, nullsFirst: false })
       .limit(5000);
     if (data) setLista(data as FilaTarjeta[]);
+    const { data: e } = await supabase.rpc("segmentos_clientes", { p_negocio: negocio.id });
+    if (e) setEstados(Object.fromEntries((e as { tarjeta_id: string; estado: EstadoCliente }[]).map((x) => [x.tarjeta_id, x.estado])));
   }
 
   const visibles = useMemo(() => {
@@ -86,13 +107,14 @@ export function Tarjetas({
         !(digitos.length >= 3 && t.telefono?.replace(/\D/g, "").includes(digitos))
       )
         return false;
+      if (estado && estados[t.id] !== estado) return false;
       if (filtro === "premio") return puntos ? t.puntos >= minimoCatalogo : t.premios > 0;
       if (filtro === "cerca") return puntos ? t.puntos >= minimoCatalogo * 0.8 : programa.meta - t.sellos <= 2;
       if (filtro === "nuevas") return ahora - Date.parse(t.created_at) < 30 * 86400000;
       if (filtro === "dormidas") return ahora - Date.parse(t.ultima_at ?? t.created_at) > 45 * 86400000;
       return true;
     });
-  }, [lista, q, filtro, programa.meta, ahora, puntos, minimoCatalogo]);
+  }, [lista, q, filtro, estado, estados, programa.meta, ahora, puntos, minimoCatalogo]);
 
   const resumen = useMemo(
     () => ({
@@ -136,6 +158,24 @@ export function Tarjetas({
           + Cliente nuevo
         </button>
       </div>
+
+      {opinionesSinLeer > 0 && (
+        <a
+          href="/panel/metricas#opiniones"
+          className="flex items-center gap-3 rounded-2xl border border-orange-300 bg-orange-50 px-4 py-3 text-sm text-orange-950 hover:bg-orange-100"
+        >
+          <span className="text-2xl" aria-hidden>
+            🙁
+          </span>
+          <span className="flex-1">
+            <b>
+              {opinionesSinLeer === 1 ? "1 cliente quedó descontento" : `${opinionesSinLeer} clientes quedaron descontentos`}
+            </b>{" "}
+            con su última visita. Revisa qué pasó antes de que no vuelvan.
+          </span>
+          <span className="font-semibold">Ver →</span>
+        </a>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Dato titulo="Clientes" valor={resumen.tarjetas} icono="clientes" tono="from-sky-400 to-blue-600" />
@@ -181,6 +221,24 @@ export function Tarjetas({
         </div>
       </div>
 
+      {Object.keys(estados).length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 text-sm">
+          <span className="mr-1 text-xs font-medium uppercase tracking-wide text-suave">Estado</span>
+          {ORDEN_ESTADOS.map((e) => (
+            <button
+              key={e}
+              type="button"
+              title={ESTADOS_CLIENTE[e].texto}
+              aria-pressed={estado === e}
+              onClick={() => setEstado(estado === e ? "" : e)}
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${ESTADOS_CLIENTE[e].clase} ${estado === e ? "ring-2 ring-marca ring-offset-1" : estado ? "opacity-50" : ""}`}
+            >
+              {ESTADOS_CLIENTE[e].nombre} · {cuentaEstados[e] ?? 0}
+            </button>
+          ))}
+        </div>
+      )}
+
       {visibles.length === 0 ? (
         <div className="tarjeta flex flex-col items-center gap-2 p-10 text-center text-sm text-suave">
           <Icono nombre="sellos" className="h-10 w-10 text-stone-300" />
@@ -204,6 +262,14 @@ export function Tarjetas({
                 <span className="min-w-0 flex-1 basis-40">
                   <span className="flex items-center gap-2 font-semibold">
                     <span className="truncate">{t.nombre}</span>
+                    {estados[t.id] && (
+                      <span
+                        title={ESTADOS_CLIENTE[estados[t.id]].texto}
+                        className={`shrink-0 rounded-full px-2 text-[11px] font-semibold ${ESTADOS_CLIENTE[estados[t.id]].clase}`}
+                      >
+                        {ESTADOS_CLIENTE[estados[t.id]].nombre}
+                      </span>
+                    )}
                     {t.premios > 0 && (
                       <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2 text-xs font-semibold text-emerald-800">
                         <Icono nombre="regalo" className="h-3 w-3" /> {t.premios === 1 ? "Premio listo" : `${t.premios} premios`}
@@ -394,7 +460,27 @@ function FichaTarjeta({
   const nivel = nivelDe(programa, t.visitas);
   const [cuponesTarjeta, setCuponesTarjeta] = useState<{ id: string; titulo: string; detalle: string; vence_at: string | null; usado_at: string | null }[]>([]);
   const [darCupon, setDarCupon] = useState("");
+  const [descuento, setDescuento] = useState("");
   const formato = (n: number) => formatoPrecio(n, negocio.moneda);
+  const cashback = puntos && programa.nombre_puntos === "pesos";
+
+  // Cashback: descontar un monto libre del saldo al pagar ("usa $3.200 de tu saldo").
+  async function usarSaldo(e: React.FormEvent) {
+    e.preventDefault();
+    const valor = Math.round(Number(descuento.replace(/[^\d]/g, "")));
+    if (!(valor > 0)) return avisar("Anota cuánto descontar", "error");
+    if (valor > t.puntos) return avisar(`El saldo no alcanza: tiene ${formato(t.puntos)}`, "error");
+    const ok = await autorizar({ titulo: `¿Descontar ${formato(valor)} del saldo?`, detalle: `Para ${t.nombre}. Le quedan ${formato(t.puntos - valor)}.`, pin: pidePin, motivo: "no" });
+    if (!ok) return;
+    setTrabajando(true);
+    const { error } = await supabase.rpc("canjear_saldo", { p_tarjeta: t.codigo, p_monto: valor, p_pin: ok.pin, p_sucursal: local });
+    setTrabajando(false);
+    if (error) return avisar(mensajeError(error), "error");
+    avisar(`Listo: ${formato(valor)} descontados`);
+    setDescuento("");
+    avisarTarjeta(t.codigo);
+    await onCambio();
+  }
 
   useEffect(() => {
     supabase
@@ -547,6 +633,7 @@ function FichaTarjeta({
     premio: "Premio del catálogo",
     cupon: "Cupón",
     reto: "Reto logrado",
+    saldo: "Usó su saldo",
   };
 
   return (
@@ -610,6 +697,31 @@ function FichaTarjeta({
               🎟️ Usar cupón: {c.titulo}
             </button>
           ))}
+
+          {cashback && t.puntos > 0 && (
+            <form onSubmit={usarSaldo} className="space-y-2 rounded-2xl border border-borde p-3">
+              <p className="text-sm font-semibold">
+                Usar saldo <span className="font-normal text-suave">· tiene {formato(t.puntos)}</span>
+              </p>
+              <div className="flex gap-2">
+                <input
+                  inputMode="numeric"
+                  value={descuento}
+                  onChange={(e) => setDescuento(e.target.value)}
+                  placeholder="Monto a descontar"
+                  aria-label="Monto a descontar del saldo"
+                  className="campo flex-1 py-2"
+                />
+                <button type="button" className="boton-secundario px-3 text-sm" onClick={() => setDescuento(String(t.puntos))} disabled={trabajando}>
+                  Todo
+                </button>
+                <button className="boton px-4" disabled={trabajando}>
+                  Descontar
+                </button>
+              </div>
+              <p className="text-xs text-suave">Se descuenta de la cuenta del cliente y queda anotado en sus movimientos.</p>
+            </form>
+          )}
 
           {puntos && canjeables.length > 0 && (
             <div className="space-y-2">

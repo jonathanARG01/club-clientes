@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { avisarCliente } from "@/lib/avisos";
+import { avisarCampana } from "@/lib/campanas";
 import { leerTarjeta, sitioDe } from "@/lib/servidor";
 import { unidad } from "@/lib/tipos";
 
@@ -11,6 +12,7 @@ type Campana = { codigo: string; tipo: "cumpleanos" | "extranamos"; regalo: numb
 
 // "Para que vuelvan", una vez al día (cron de Vercel): saludo de cumpleaños y "te extrañamos", con sus sellos de
 // regalo. La base marca cada tarjeta para no repetir y suma los regalos; aquí solo se avisa al cliente.
+// También envía las campañas programadas para hoy y guarda la foto diaria de los estados de clientes.
 // Requiere CRON_SECRET y SUPABASE_SERVICE_ROLE_KEY en Vercel.
 export async function GET(request: Request) {
   const secreto = process.env.CRON_SECRET;
@@ -20,10 +22,27 @@ export async function GET(request: Request) {
   const admin = createAdminClient();
   if (!admin) return NextResponse.json({ error: "Falta SUPABASE_SERVICE_ROLE_KEY" }, { status: 500 });
 
+  const inicio = Date.now();
+  const sitio = sitioDe(request);
+
+  // Primero las campañas programadas (la base las marca como enviadas y anota a quiénes).
+  let programadas = 0;
+  let avisosProgramadas = 0;
+  const { data: progs, error: errorProgs } = await admin.rpc("campanas_programadas");
+  if (errorProgs) console.error(errorProgs);
+  for (const k of (progs ?? []) as { id: string; titulo: string; mensaje: string; codigos: string[] }[]) {
+    const r = await avisarCampana(admin, k.codigos ?? [], { titulo: k.titulo, cuerpo: k.mensaje }, sitio, inicio + 30000);
+    await admin.from("campanas").update({ avisos: r.enviados, wallet: r.wallet }).eq("id", k.id);
+    programadas++;
+    avisosProgramadas += r.enviados;
+  }
+
+  const { error: errorSegmentos } = await admin.rpc("guardar_segmentos");
+  if (errorSegmentos) console.error(errorSegmentos);
+
   const { data, error } = await admin.rpc("campanas_del_dia");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const sitio = sitioDe(request);
   let enviados = 0;
   for (const c of (data ?? []) as Campana[]) {
     const t = await leerTarjeta(c.codigo);
@@ -55,5 +74,5 @@ export async function GET(request: Request) {
     const r = await avisarCliente(admin, t, mensaje, sitio);
     enviados += r.enviados;
   }
-  return NextResponse.json({ tarjetas: (data ?? []).length, enviados });
+  return NextResponse.json({ tarjetas: (data ?? []).length, enviados, programadas, avisos_programadas: avisosProgramadas });
 }
