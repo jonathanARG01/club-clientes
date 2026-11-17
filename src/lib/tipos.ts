@@ -34,6 +34,8 @@ export type ProgramaSellos = {
   texto_claro: boolean;
   // 0004: el cliente ve el catálogo de premios (con sellos, elige uno al completar la tarjeta).
   mostrar_catalogo: boolean;
+  // 0006: encuesta de un toque después de cada visita.
+  pedir_encuesta: boolean;
 };
 
 export type TipoTarjeta = "sellos" | "puntos";
@@ -71,6 +73,7 @@ export const PROGRAMA_BASE: ProgramaSellos = {
   fondo_url: null,
   texto_claro: true,
   mostrar_catalogo: true,
+  pedir_encuesta: true,
 };
 
 // Lo que se dibuja en cada sello de la tarjeta (los de comida vienen de Platovi; el resto, para otros rubros).
@@ -305,8 +308,29 @@ export const SEGMENTOS = {
   cumple: { nombre: "Cumpleaños del mes", texto: "Están de cumpleaños este mes." },
   frecuentes: { nombre: "Frecuentes", texto: "4 visitas o más en los últimos 60 días." },
   vip: { nombre: "VIP", texto: "El 10 % que más viene (10 visitas o más)." },
+  en_riesgo: { nombre: "En riesgo", texto: "Venían seguido y llevan 21 días sin venir." },
 } as const;
 export type Segmento = keyof typeof SEGMENTOS;
+
+// Estado de cada cliente (0006, función estados_de): uno solo por cliente, en este orden de prioridad.
+export const ESTADOS_CLIENTE = {
+  vip: { nombre: "VIP", texto: "El 10 % que más viene, con 10 visitas o más.", clase: "bg-amber-100 text-amber-900" },
+  frecuente: { nombre: "Frecuente", texto: "4 visitas o más en los últimos 60 días.", clase: "bg-emerald-100 text-emerald-900" },
+  nuevo: { nombre: "Nuevo", texto: "Se unió en los últimos 30 días.", clase: "bg-sky-100 text-sky-900" },
+  ocasional: { nombre: "Ocasional", texto: "Viene de vez en cuando.", clase: "bg-stone-100 text-stone-700" },
+  en_riesgo: { nombre: "En riesgo", texto: "Venía seguido y lleva 21 días sin venir.", clase: "bg-orange-100 text-orange-900" },
+  dormido: { nombre: "Dormido", texto: "No viene hace 45 días o más.", clase: "bg-red-100 text-red-800" },
+} as const;
+export type EstadoCliente = keyof typeof ESTADOS_CLIENTE;
+export const ORDEN_ESTADOS: EstadoCliente[] = ["vip", "frecuente", "nuevo", "ocasional", "en_riesgo", "dormido"];
+// Campaña sugerida para cada estado (en Métricas).
+export const CAMPANA_DE_ESTADO: Partial<Record<EstadoCliente, Segmento>> = {
+  vip: "vip",
+  frecuente: "frecuentes",
+  nuevo: "nuevos",
+  en_riesgo: "en_riesgo",
+  dormido: "dormidos",
+};
 
 // "sellos", "puntos" o el nombre que el negocio le puso ("pesos" en cashback).
 export const unidad = (p: Pick<ProgramaSellos, "tipo" | "nombre_puntos">, n = 2) =>

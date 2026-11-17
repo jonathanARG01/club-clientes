@@ -17,7 +17,17 @@ export type FilaCampana = {
   avisos: number;
   wallet: number;
   created_at: string;
+  estado?: "programada" | "enviada" | "cancelada";
+  programada_para?: string | null;
+  enviada_at?: string | null;
+  cupon_id?: string | null;
 };
+export type ResultadoCampana = { volvieron: number; cupones_usados: number };
+
+// Fecha de hoy (AAAA-MM-DD) en la zona horaria del negocio, más n días.
+function diaDe(zona: string, mas = 0) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: zona || "America/Santiago" }).format(new Date(Date.now() + mas * 86400000));
+}
 
 const IDEAS: { titulo: string; mensaje: string; segmento: Segmento }[] = [
   { titulo: "Te extrañamos", mensaje: "Hace tiempo que no vienes. Esta semana tu visita suma el doble. ¡Te esperamos!", segmento: "dormidos" },
@@ -33,6 +43,8 @@ export function Campanas({
   niveles,
   sucursales,
   historial,
+  resultados = {},
+  segmentoInicial,
 }: {
   negocio: Negocio;
   puede: { campanas: boolean; cupones: boolean };
@@ -40,6 +52,8 @@ export function Campanas({
   niveles: Nivel[];
   sucursales: Sucursal[];
   historial: FilaCampana[];
+  resultados?: Record<string, ResultadoCampana>;
+  segmentoInicial?: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const avisar = useToast();
@@ -47,12 +61,16 @@ export function Campanas({
   const [f, setF] = useState({
     titulo: "",
     mensaje: "",
-    segmento: "dormidos" as string,
+    segmento: segmentoInicial || "dormidos",
     dias: 30,
     canal: "avisos" as "avisos" | "whatsapp",
     cupon: "",
     sucursal: "",
+    programar: false,
+    dia: diaDe(negocio.zona_horaria, 1),
   });
+  const programada = f.programar && f.canal === "avisos";
+  const textoDia = (d: string) => formatoFecha(`${d}T12:00:00`, { weekday: "long", day: "numeric", month: "long" }, negocio.zona_horaria);
   const [cuantos, setCuantos] = useState<number | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [lista, setLista] = useState<{ nombre: string; telefono: string | null; codigo: string }[] | null>(null);
@@ -71,7 +89,14 @@ export function Campanas({
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
-    if (!confirm(`¿Enviar “${f.titulo}” a ${cuantos ?? 0} clientes?`)) return;
+    if (
+      !confirm(
+        programada
+          ? `¿Programar “${f.titulo}” para el ${textoDia(f.dia)}? Hoy serían ${cuantos ?? 0} clientes; el grupo se arma ese día.`
+          : `¿Enviar “${f.titulo}” a ${cuantos ?? 0} clientes?`,
+      )
+    )
+      return;
     setEnviando(true);
     try {
       const { data, error } = await supabase.rpc("crear_campana", {
@@ -83,10 +108,13 @@ export function Campanas({
         p_dias: f.dias,
         p_cupon: f.cupon || null,
         p_sucursal: f.sucursal || null,
+        p_programada: programada ? f.dia : null,
       });
       if (error) throw error;
-      const r = data as { id: string; codigos: string[] };
-      if (f.canal === "avisos") {
+      const r = data as { id: string; codigos: string[]; programada?: string };
+      if (r.programada) {
+        avisar(`Campaña programada para el ${textoDia(r.programada)}`);
+      } else if (f.canal === "avisos") {
         const res = await fetch("/api/campanas/enviar", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -104,13 +132,21 @@ export function Campanas({
         setAbiertos([]);
         avisar("Lista lista: envía el mensaje a cada uno por WhatsApp");
       }
-      setF({ ...f, titulo: "", mensaje: "" });
+      setF({ ...f, titulo: "", mensaje: "", programar: false });
       router.refresh();
     } catch (err) {
       avisar(mensajeError(err), "error");
     } finally {
       setEnviando(false);
     }
+  }
+
+  async function cancelar(id: string) {
+    if (!confirm("¿Cancelar esta campaña programada?")) return;
+    const { error } = await supabase.rpc("cancelar_campana", { p_campana: id });
+    if (error) return avisar(mensajeError(error), "error");
+    avisar("Campaña cancelada");
+    router.refresh();
   }
 
   if (!puede.campanas)
@@ -231,11 +267,43 @@ export function Campanas({
               </label>
             </fieldset>
           </div>
+          {f.canal === "avisos" && (
+            <fieldset className="text-sm">
+              <legend className="etiqueta-campo">Cuándo</legend>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <label className="flex items-center gap-2">
+                  <input type="radio" checked={!f.programar} onChange={() => setF({ ...f, programar: false })} />
+                  Ahora
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="radio" checked={f.programar} onChange={() => setF({ ...f, programar: true })} />
+                  Otro día
+                </label>
+                {f.programar && (
+                  <input
+                    type="date"
+                    required
+                    value={f.dia}
+                    min={diaDe(negocio.zona_horaria, 1)}
+                    max={diaDe(negocio.zona_horaria, 90)}
+                    onChange={(e) => setF({ ...f, dia: e.target.value })}
+                    className="campo w-auto py-1.5"
+                    aria-label="Día de envío"
+                  />
+                )}
+              </div>
+              {f.programar && (
+                <p className="mt-1 text-xs text-suave">
+                  Sale ese día en la mañana (cerca de las 11). El grupo se arma ese mismo día, así llega a quienes calcen en ese momento.
+                </p>
+              )}
+            </fieldset>
+          )}
           <div className="flex flex-wrap items-center gap-3">
-            <button className="boton" disabled={enviando || !cuantos}>
-              {enviando ? "Enviando…" : `Enviar a ${cuantos ?? "…"} clientes`}
+            <button className="boton" disabled={enviando || (!cuantos && !programada)}>
+              {enviando ? "Enviando…" : programada ? `Programar para el ${textoDia(f.dia)}` : `Enviar a ${cuantos ?? "…"} clientes`}
             </button>
-            {cuantos === 0 && <p className="text-sm text-suave">Nadie de ese grupo aceptó avisos todavía.</p>}
+            {cuantos === 0 && !programada && <p className="text-sm text-suave">Nadie de ese grupo aceptó avisos todavía.</p>}
           </div>
         </form>
 
@@ -269,19 +337,53 @@ export function Campanas({
       </div>
 
       <div className="space-y-3">
-        <h2 className="font-semibold">Enviadas</h2>
+        <h2 className="font-semibold">Tus campañas</h2>
         {!historial.length && <p className="text-sm text-suave">Todavía no envías campañas.</p>}
-        {historial.map((c) => (
-          <div key={c.id} className="tarjeta p-4 text-sm">
-            <p className="font-semibold">{c.titulo}</p>
-            <p className="line-clamp-2 text-suave">{c.mensaje}</p>
-            <p className="mt-1 text-xs text-suave">
-              {formatoFecha(c.created_at, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }, negocio.zona_horaria)} ·{" "}
-              {SEGMENTOS[c.segmento as Segmento]?.nombre ?? c.segmento.replace("nivel:", "Nivel ")} · {c.destinatarios} clientes
-              {c.canal === "avisos" ? ` · ${c.avisos} avisos · ${c.wallet} Wallet` : " · WhatsApp"}
-            </p>
-          </div>
-        ))}
+        {historial.map((c) => {
+          const grupo = SEGMENTOS[c.segmento as Segmento]?.nombre ?? c.segmento.replace("nivel:", "Nivel ");
+          const r = resultados[c.id];
+          const salio = c.enviada_at ?? c.created_at;
+          const midiendo = Date.now() - Date.parse(salio) < 14 * 86400000;
+          return (
+            <div key={c.id} className={`tarjeta p-4 text-sm ${c.estado === "cancelada" ? "opacity-60" : ""}`}>
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-semibold">{c.titulo}</p>
+                {c.estado === "programada" && (
+                  <span className="shrink-0 rounded-full bg-sky-100 px-2 text-[11px] font-semibold text-sky-900">Programada</span>
+                )}
+                {c.estado === "cancelada" && (
+                  <span className="shrink-0 rounded-full bg-stone-100 px-2 text-[11px] font-semibold text-stone-700">Cancelada</span>
+                )}
+              </div>
+              <p className="line-clamp-2 text-suave">{c.mensaje}</p>
+              {c.estado === "programada" || c.estado === "cancelada" ? (
+                <p className="mt-1 text-xs text-suave">
+                  {c.programada_para ? `Para el ${textoDia(c.programada_para)}` : ""} · {grupo}
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-suave">
+                  {formatoFecha(salio, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }, negocio.zona_horaria)} · {grupo} ·{" "}
+                  {c.destinatarios} clientes
+                  {c.canal === "avisos" ? ` · ${c.avisos} avisos · ${c.wallet} Wallet` : " · WhatsApp"}
+                </p>
+              )}
+              {r && c.destinatarios > 0 && (
+                <p className="mt-2 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs text-emerald-900">
+                  <b>
+                    Volvieron {r.volvieron} de {c.destinatarios} ({Math.round((r.volvieron / c.destinatarios) * 100)} %)
+                  </b>{" "}
+                  {midiendo ? "hasta ahora (se mide 14 días)" : "en los 14 días siguientes"}
+                  {c.cupon_id ? ` · ${r.cupones_usados} usaron el cupón` : ""}
+                </p>
+              )}
+              {c.estado === "programada" && (
+                <button type="button" className="mt-2 text-xs text-suave hover:text-red-600" onClick={() => cancelar(c.id)}>
+                  Cancelar
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

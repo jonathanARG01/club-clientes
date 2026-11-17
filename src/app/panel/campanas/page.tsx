@@ -1,13 +1,16 @@
 import { cargarPanelGestor } from "@/lib/panel";
-import { Campanas, type FilaCampana } from "@/components/panel/Campanas";
+import { Campanas, type FilaCampana, type ResultadoCampana } from "@/components/panel/Campanas";
+import { SEGMENTOS } from "@/lib/tipos";
 
 export const metadata = { title: "Campañas" };
 
-export default async function PaginaCampanas() {
+export default async function PaginaCampanas({ searchParams }: { searchParams: Promise<{ segmento?: string }> }) {
   const { supabase, negocio, programa, sucursales, incluye } = await cargarPanelGestor();
-  const [{ data: cupones }, { data: historial }] = await Promise.all([
+  const pedido = (await searchParams).segmento ?? "";
+  const [{ data: cupones }, { data: historial }, { data: resultados }] = await Promise.all([
     supabase.from("cupones").select("id, titulo").eq("negocio_id", negocio.id).eq("activo", true),
     supabase.from("campanas").select("*").eq("negocio_id", negocio.id).order("created_at", { ascending: false }).limit(30),
+    incluye("campanas") ? supabase.rpc("resultados_campanas", { p_negocio: negocio.id }) : Promise.resolve({ data: [] }),
   ]);
   return (
     <div className="space-y-5">
@@ -22,6 +25,10 @@ export default async function PaginaCampanas() {
         niveles={incluye("niveles") ? programa.niveles : []}
         sucursales={sucursales}
         historial={(historial ?? []) as FilaCampana[]}
+        resultados={Object.fromEntries(
+          ((resultados ?? []) as ({ id: string } & ResultadoCampana)[]).map((r) => [r.id, { volvieron: r.volvieron, cupones_usados: r.cupones_usados }]),
+        )}
+        segmentoInicial={pedido in SEGMENTOS ? pedido : undefined}
       />
     </div>
   );

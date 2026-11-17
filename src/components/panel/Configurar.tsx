@@ -427,6 +427,21 @@ export function Configurar({
             />
           </div>
 
+          <div className="flex items-start justify-between gap-3">
+            <div className="text-sm">
+              <p className="font-medium">Preguntar cómo le fue</p>
+              <p className="text-suave">
+                Después de cada visita, la tarjeta pregunta con un toque (😞 a 😍). Si alguien queda descontento, lo ves en
+                Métricas antes de que se vaya, sin que sea público.
+              </p>
+            </div>
+            <Interruptor
+              activo={p.pedir_encuesta !== false}
+              onChange={(v) => cambiar({ pedir_encuesta: v })}
+              etiqueta="Preguntar cómo le fue"
+            />
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-sm">
               <span className="etiqueta-campo">“Te extrañamos” si no vuelve en</span>

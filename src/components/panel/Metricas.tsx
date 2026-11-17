@@ -4,7 +4,16 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/Toast";
-import { COLUMNAS_TARJETA, type FilaTarjeta, type Negocio, type ProgramaSellos } from "@/lib/tipos";
+import {
+  CAMPANA_DE_ESTADO,
+  COLUMNAS_TARJETA,
+  ESTADOS_CLIENTE,
+  ORDEN_ESTADOS,
+  type EstadoCliente,
+  type FilaTarjeta,
+  type Negocio,
+  type ProgramaSellos,
+} from "@/lib/tipos";
 import { formatoFecha, formatoPrecio, mensajeError } from "@/lib/utils";
 
 export type DatosMetricas = {
@@ -26,6 +35,13 @@ export type DatosMetricas = {
   top?: { nombre: string; codigo: string; visitas: number }[];
 };
 
+type Conteos = Record<EstadoCliente, number>;
+export type ResumenSegmentos = { ahora: Conteos; hace_7: Conteos | null; hace_30: Conteos | null; desde: string | null };
+export type Opinion = { id: string; nota: number; comentario: string | null; leida: boolean; created_at: string; nombre: string; codigo: string };
+export type DatosOpiniones = { total: number; promedio: number | null; notas: number[]; sin_leer: number; ultimas: Opinion[] };
+
+const CARAS = ["😞", "🙁", "😐", "🙂", "😍"];
+
 const DIAS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
 function variacion(ahora: number, antes: number) {
@@ -43,6 +59,9 @@ export function Metricas({
   completo,
   datos,
   error,
+  segmentos,
+  opiniones,
+  campanas,
 }: {
   negocio: Negocio;
   programa: ProgramaSellos;
@@ -52,10 +71,21 @@ export function Metricas({
   completo: boolean;
   datos: DatosMetricas | null;
   error: string | null;
+  segmentos: ResumenSegmentos | null;
+  opiniones: DatosOpiniones | null;
+  // ¿El plan incluye campañas? (para el botón "Enviarles una campaña").
+  campanas: boolean;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const avisar = useToast();
   const [exportando, setExportando] = useState(false);
+  const [leidas, setLeidas] = useState<string[]>([]);
+
+  async function marcarLeida(ids: string[]) {
+    const { error } = await supabase.from("encuestas").update({ leida: true }).in("id", ids);
+    if (error) return avisar(mensajeError(error), "error");
+    setLeidas((l) => [...l, ...ids]);
+  }
 
   async function exportar() {
     setExportando(true);
@@ -143,6 +173,145 @@ export function Metricas({
             <Dato titulo="Vinieron en el período" valor={datos.activos} />
             <Dato titulo="Inversión en premios" texto={formatoPrecio(Number(datos.costo_premios), negocio.moneda)} nota="Según el costo que anotaste" />
           </div>
+
+          {segmentos && (
+            <div className="tarjeta p-5">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <h2 className="font-semibold">Tus clientes por estado</h2>
+                  <p className="text-sm text-suave">Se actualiza solo cada día. Cada cliente está en un solo grupo.</p>
+                </div>
+                {!segmentos.hace_7 && (
+                  <p className="text-xs text-suave">Los cambios aparecen después de una semana de datos guardados.</p>
+                )}
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                {ORDEN_ESTADOS.map((e) => {
+                  const n = segmentos.ahora[e] ?? 0;
+                  const d7 = segmentos.hace_7 ? n - (segmentos.hace_7[e] ?? 0) : null;
+                  const d30 = segmentos.hace_30 ? n - (segmentos.hace_30[e] ?? 0) : null;
+                  const malo = e === "en_riesgo" || e === "dormido";
+                  const color = (d: number) => (d === 0 ? "text-suave" : d > 0 !== malo ? "text-emerald-700" : "text-red-700");
+                  const campana = CAMPANA_DE_ESTADO[e];
+                  return (
+                    <div key={e} className="rounded-xl border border-borde p-3">
+                      <span className={`inline-block rounded-full px-2 text-[11px] font-semibold ${ESTADOS_CLIENTE[e].clase}`}>
+                        {ESTADOS_CLIENTE[e].nombre}
+                      </span>
+                      <p className="mt-1 text-2xl font-semibold tabular-nums">{n.toLocaleString("es-CL")}</p>
+                      <p className="text-[11px] leading-tight text-suave">{ESTADOS_CLIENTE[e].texto}</p>
+                      {d7 !== null && (
+                        <p className={`mt-1 text-xs font-medium ${color(d7)}`}>
+                          {d7 > 0 ? "+" : ""}
+                          {d7} en 7 días
+                        </p>
+                      )}
+                      {d30 !== null && (
+                        <p className={`text-xs ${color(d30)}`}>
+                          {d30 > 0 ? "+" : ""}
+                          {d30} en 30 días
+                        </p>
+                      )}
+                      {campana && campanas && n > 0 && (
+                        <Link href={`/panel/campanas?segmento=${campana}`} className="mt-1 block text-xs font-medium text-marca hover:underline">
+                          Enviarles una campaña →
+                        </Link>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {opiniones && (
+            <div id="opiniones" className="tarjeta scroll-mt-24 p-5">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <h2 className="font-semibold">Cómo les fue a tus clientes</h2>
+                  <p className="text-sm text-suave">La encuesta de un toque después de cada visita. Solo la ves tú y tu equipo.</p>
+                </div>
+                {opiniones.total > 0 && (
+                  <p className="text-right">
+                    <span className="text-3xl font-semibold tabular-nums">{String(opiniones.promedio ?? "–").replace(".", ",")}</span>
+                    <span className="text-sm text-suave"> / 5 · {opiniones.total} respuestas</span>
+                  </p>
+                )}
+              </div>
+              {opiniones.total === 0 ? (
+                <p className="mt-3 text-sm text-suave">
+                  Todavía no hay respuestas en este período. Se pregunta después de cada visita (puedes apagarlo en Tarjeta).
+                </p>
+              ) : (
+                <ul className="mt-4 space-y-1.5 text-sm">
+                  {[...opiniones.notas].reverse().map((v, i) => {
+                    const nota = 5 - i;
+                    return (
+                      <li key={nota} className="grid grid-cols-[2rem_1fr_4rem] items-center gap-2">
+                        <span className="text-lg" aria-label={`Nota ${nota}`}>
+                          {CARAS[nota - 1]}
+                        </span>
+                        <span className="h-3 rounded-full bg-stone-100">
+                          <span
+                            className={`block h-full rounded-full ${nota >= 4 ? "bg-emerald-500" : nota === 3 ? "bg-amber-400" : "bg-red-500"}`}
+                            style={{ width: `${(v / Math.max(1, opiniones.total)) * 100}%` }}
+                          />
+                        </span>
+                        <span className="text-right tabular-nums text-suave">
+                          {v} · {Math.round((v / Math.max(1, opiniones.total)) * 100)} %
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {opiniones.ultimas.length > 0 && (
+                <div className="mt-5">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold">Para revisar</h3>
+                    {opiniones.ultimas.some((o) => !o.leida && !leidas.includes(o.id)) && (
+                      <button
+                        type="button"
+                        className="text-xs text-suave hover:text-tinta"
+                        onClick={() => marcarLeida(opiniones.ultimas.filter((o) => !o.leida && !leidas.includes(o.id)).map((o) => o.id))}
+                      >
+                        Marcar todas como revisadas
+                      </button>
+                    )}
+                  </div>
+                  <ul className="mt-2 divide-y divide-borde rounded-xl border border-borde text-sm">
+                    {opiniones.ultimas.map((o) => {
+                      const nueva = !o.leida && !leidas.includes(o.id);
+                      return (
+                        <li key={o.id} className={`flex items-start gap-3 px-3 py-2.5 ${nueva ? "bg-orange-50/60" : ""}`}>
+                          <span className="text-xl" aria-label={`Nota ${o.nota}`}>
+                            {CARAS[o.nota - 1]}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="font-medium">{o.nombre}</span>
+                            <span className="text-xs text-suave">
+                              {" "}
+                              · {formatoFecha(o.created_at, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }, negocio.zona_horaria)} ·{" "}
+                              {o.codigo}
+                            </span>
+                            {o.comentario ? <span className="block text-suave">“{o.comentario}”</span> : <span className="block text-xs text-suave">Sin comentario</span>}
+                          </span>
+                          {nueva && (
+                            <button type="button" className="shrink-0 text-xs font-medium text-marca hover:underline" onClick={() => marcarLeida([o.id])}>
+                              Revisada
+                            </button>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <p className="mt-2 text-xs text-suave">
+                    Un consejo: escríbele a quien quedó descontento y regálale algo en su próxima visita. Busca su nombre en Clientes.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {!completo ? (
             <div className="tarjeta border-dashed p-5 text-sm">

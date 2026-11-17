@@ -45,7 +45,7 @@ export const HERRAMIENTAS = {
   },
   listar_clientes: {
     descripcion:
-      "Lista clientes del negocio. Segmentos: todos, cerca (cerca del premio), premio (con premio sin canjear), dormidos (no vienen hace 'dias'), nuevos, cumple (cumpleaños este mes), frecuentes, vip, nivel:<nombre>. Se puede buscar por nombre.",
+      "Lista clientes del negocio. Segmentos: todos, cerca (cerca del premio), premio (con premio sin canjear), dormidos (no vienen hace 'dias'), nuevos, cumple (cumpleaños este mes), frecuentes, vip, en_riesgo (venían seguido y llevan 21 días sin venir), nivel:<nombre>. Se puede buscar por nombre.",
     parametros: {
       segmento: { type: "string", description: "Grupo de clientes (por defecto todos)" },
       dias: { type: "number", description: "Días sin venir para 'dormidos' (por defecto 30)" },

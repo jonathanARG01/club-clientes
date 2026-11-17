@@ -15,8 +15,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: titulo,
     robots: { index: false },
-    // Para guardarla en la pantalla de inicio del iPhone (y recibir avisos ahí).
+    // Para instalarla como app con la marca del negocio (Android y iPhone) y recibir avisos ahí.
     appleWebApp: { capable: true, title: t?.negocio.nombre ?? "Mi tarjeta", statusBarStyle: "default" },
+    ...(t && {
+      manifest: `/t/${t.codigo}/manifest.webmanifest`,
+      icons: { icon: `/api/icono/${t.codigo}/192`, apple: `/api/icono/${t.codigo}/180` },
+    }),
   };
 }
 
