@@ -21,7 +21,7 @@ export function Logo({ className = "", claro = false }: { className?: string; cl
         <circle cx="32" cy="32" r="19" fill="none" stroke="url(#logo-club-oro)" strokeWidth="3.5" strokeDasharray="5 4" />
         <path d="M22.5 33l6.5 6.5 13-14" fill="none" stroke="url(#logo-club-oro)" strokeWidth="5.5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
-      <span className={claro ? "text-white" : "text-tinta"}>{MARCA.toLowerCase()}</span>
+      <span className={claro ? "text-white" : "text-tinta"}>{MARCA}</span>
     </span>
   );
 }
