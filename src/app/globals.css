@@ -14,6 +14,20 @@
   --color-superficie: #ffffff;
 }
 
+/* Oro del logo (components/Logo.tsx): más profundo sobre fondo claro, más luminoso en tema oscuro. */
+:root {
+  --sdo-oro-1: #d9b85a;
+  --sdo-oro-2: #b8902f;
+  --sdo-oro-3: #7a5b14;
+  --sdo-oro-4: #c49a2c;
+}
+html[data-tema="oscuro"] {
+  --sdo-oro-1: #f7e7b4;
+  --sdo-oro-2: #d4af37;
+  --sdo-oro-3: #a7802a;
+  --sdo-oro-4: #f0d58a;
+}
+
 body {
   background: var(--color-fondo);
   color: var(--color-tinta);

@@ -1,25 +1,37 @@
 import { MARCA } from "@/lib/marca";
 
-// Logo: un sello con un visto al centro (fondo carbón con borde, anillo y visto en oro).
+// Logo Sellos de Oro: lacre dorado con la S grabada, rodeado por una barra de progreso
+// (7 de 10 sellos ganados) y los 2 sellos que faltan. Los trazos vienen de scripts fuera del repo;
+// la S es la letra de Cormorant Garamond Bold convertida a trazo, para no depender de la fuente.
+const ARCO = "M32 7.8A24.2 24.2 0 1 1 8.98 39.48";
+const LACRE = "M49.66 32L49.93 33.57L49.09 35.01L47.9 36.26L47.29 37.56L47.24 39.11L46.97 40.64L45.94 41.76L44.44 42.44L43.08 43.08L42.02 43.94L40.96 44.8L39.74 45.41L38.56 46.06L37.55 47.25L36.53 48.9L35.19 50.1L33.58 50.06L32 49.04L30.59 48.1L29.2 47.86L27.73 47.92L26.34 47.56L25.18 46.63L24.11 45.66L22.92 44.97L21.67 44.31L20.69 43.31L19.95 42.11L18.93 41.15L17.28 40.5L15.51 39.69L14.59 38.34L14.92 36.58L15.8 34.86L16.29 33.37L16.19 32L16.08 30.61L16.39 29.25L16.84 27.94L17 26.54L17.04 25.02L17.53 23.65L18.61 22.62L19.73 21.7L20.36 20.36L20.71 18.54L21.48 16.97L22.99 16.39L24.87 16.71L26.59 17.12L27.99 17.05L29.3 16.69L30.65 16.53L32 16.52L33.38 16.2L34.9 15.55L36.49 15.23L37.89 15.82L38.99 17.01L40.12 17.94L41.64 18.23L43.36 18.46L44.64 19.36L45.12 20.99L45.17 22.78L45.42 24.25L45.98 25.48L46.48 26.73L46.82 28.03L47.39 29.29L48.51 30.56Z";
+const S = "M30.25 28.08Q30.25 28.78 30.61 29.31Q30.97 29.84 31.56 30.26Q32.14 30.69 32.79 31.11Q33.49 31.56 34.13 32.05Q34.77 32.54 35.18 33.17Q35.6 33.81 35.6 34.7Q35.6 35.68 35.07 36.42Q34.55 37.16 33.65 37.58Q32.75 37.99 31.6 37.99Q31.05 37.99 30.45 37.88Q29.85 37.77 29.36 37.61Q28.87 37.44 28.64 37.25Q28.57 37.2 28.51 37.13Q28.46 37.07 28.46 36.9L28.4 33.96Q28.38 33.87 28.49 33.86Q28.59 33.85 28.61 33.92Q28.88 34.5 29.22 35.14Q29.55 35.77 29.97 36.31Q30.38 36.85 30.9 37.19Q31.42 37.53 32.08 37.53Q32.51 37.53 32.9 37.38Q33.29 37.24 33.54 36.85Q33.79 36.46 33.79 35.77Q33.79 34.9 33.4 34.28Q33.01 33.66 32.4 33.19Q31.79 32.72 31.12 32.3Q30.48 31.87 29.88 31.42Q29.29 30.96 28.92 30.38Q28.55 29.8 28.55 28.98Q28.55 27.95 29.13 27.29Q29.72 26.63 30.61 26.32Q31.51 26.01 32.44 26.01Q33.1 26.01 33.77 26.13Q34.43 26.25 34.82 26.41Q35.01 26.49 35.05 26.58Q35.1 26.67 35.1 26.78V29.5Q35.1 29.56 35.02 29.59Q34.93 29.61 34.9 29.56Q34.79 29.34 34.58 28.83Q34.38 28.32 34.05 27.76Q33.71 27.21 33.19 26.81Q32.68 26.41 31.94 26.41Q31.47 26.41 31.09 26.6Q30.72 26.78 30.48 27.14Q30.25 27.5 30.25 28.08Z";
+
 export function Logo({ className = "", claro = false }: { className?: string; claro?: boolean }) {
+  // claro = el logo va siempre sobre fondo oscuro.
+  const id = claro ? "sdo-oro-oscuro" : "sdo-oro-claro";
+  const oro = `url(#${id})`;
+  // Sin `claro`, los tonos siguen el tema de la app (variables --sdo-oro-* en globals.css).
+  const tonos = claro
+    ? ["#f7e7b4", "#d4af37", "#a7802a", "#f0d58a"]
+    : ["var(--sdo-oro-1)", "var(--sdo-oro-2)", "var(--sdo-oro-3)", "var(--sdo-oro-4)"];
   return (
     <span className={`inline-flex items-center gap-2 font-extrabold tracking-tight ${className}`}>
-      <svg viewBox="0 0 64 64" className="h-[1.6em] w-[1.6em] shrink-0" aria-hidden>
+      <svg viewBox="5 5 54 54" className="h-[1.7em] w-[1.7em] shrink-0" aria-hidden>
         <defs>
-          <linearGradient id="logo-club-oro" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#f7e7b4" />
-            <stop offset=".4" stopColor="#d4af37" />
-            <stop offset=".75" stopColor="#a7802a" />
-            <stop offset="1" stopColor="#f0d58a" />
-          </linearGradient>
-          <linearGradient id="logo-club-fondo" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#26262a" />
-            <stop offset="1" stopColor="#0d0d0f" />
+          <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor={tonos[0]} />
+            <stop offset=".4" stopColor={tonos[1]} />
+            <stop offset=".75" stopColor={tonos[2]} />
+            <stop offset="1" stopColor={tonos[3]} />
           </linearGradient>
         </defs>
-        <rect x="1.5" y="1.5" width="61" height="61" rx="15" fill="url(#logo-club-fondo)" stroke="url(#logo-club-oro)" strokeWidth="3" />
-        <circle cx="32" cy="32" r="19" fill="none" stroke="url(#logo-club-oro)" strokeWidth="3.5" strokeDasharray="5 4" />
-        <path d="M22.5 33l6.5 6.5 13-14" fill="none" stroke="url(#logo-club-oro)" strokeWidth="5.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={ARCO} fill="none" stroke={oro} strokeWidth="5.6" strokeLinecap="round" />
+        <circle cx="8.98" cy="24.52" r="2.4" fill="none" stroke={oro} strokeWidth="1.4" />
+        <circle cx="17.78" cy="12.42" r="2.4" fill="none" stroke={oro} strokeWidth="1.4" />
+        <path d={LACRE} fill={oro} />
+        <circle cx="32" cy="32" r="12.21" fill="none" stroke="#141414" strokeOpacity=".5" strokeWidth=".9" />
+        <path d={S} fill="#141414" />
       </svg>
       <span className={claro ? "text-white" : "text-tinta"}>{MARCA}</span>
     </span>
