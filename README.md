@@ -1,12 +1,14 @@
-# Sellito
+# Club de Clientes
 
 Tarjeta digital de sellos para cualquier negocio (cafés, peluquerías, barberías, tiendas, lavados de autos…).
 Producto de BROTE DIGITAL SpA, **independiente de Platovi**: nace del módulo Platovi Loyalty, pero tiene su propia
 app, su propia base de datos (otro proyecto de Supabase), su propio proyecto en Vercel y su propio dominio.
 Platovi Loyalty sigue igual dentro de Platovi.
 
-El código vive en esta carpeta (`sellos/`) del repositorio de Platovi solo por comodidad. No importa nada de fuera de
-ella, así que se puede mover a un repositorio propio cuando se quiera (`git subtree split --prefix=sellos`).
+Este es su repositorio propio desde el 17-11-2026. Antes vivía en la carpeta `sellos/` del repositorio de Platovi
+(menu-qr) y se trajo con todo su historial (`git subtree split --prefix=sellos`). En Vercel, el proyecto
+`club-clientes` despliega desde aquí con el Root Directory vacío. El nombre "Club de Clientes" es provisional y se
+cambia con `NEXT_PUBLIC_MARCA`.
 
 ## Qué hace
 
