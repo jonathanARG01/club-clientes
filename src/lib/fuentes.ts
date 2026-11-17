@@ -1,13 +1,10 @@
-import { Anton, Caveat, Playfair_Display, Space_Mono } from "next/font/google";
+import type { CSSProperties } from "react";
 
-// Tipografías de los diseños de la tarjeta de sellos. Sin precarga: el navegador baja solo la del diseño que se ve.
-export const fuenteSerif = Playfair_Display({
-  subsets: ["latin"],
-  weight: ["400", "700", "900"],
-  style: ["normal", "italic"],
-  display: "swap",
-  preload: false,
-});
-export const fuenteMono = Space_Mono({ subsets: ["latin"], weight: ["400", "700"], display: "swap", preload: false });
-export const fuenteTiza = Caveat({ subsets: ["latin"], weight: ["500", "700"], display: "swap", preload: false });
-export const fuentePop = Anton({ subsets: ["latin"], weight: "400", display: "swap", preload: false });
+// Tipografías de los diseños de la tarjeta de sellos. Vienen de @fontsource (importadas en globals.css), así el build
+// no depende de bajarlas de Google Fonts. El navegador descarga solo la del diseño que se ve.
+const fuente = (familia: string, respaldo: string): { style: CSSProperties } => ({ style: { fontFamily: `'${familia}', ${respaldo}` } });
+
+export const fuenteSerif = fuente("Playfair Display", "Georgia, serif");
+export const fuenteMono = fuente("Space Mono", "ui-monospace, monospace");
+export const fuenteTiza = fuente("Caveat", "cursive");
+export const fuentePop = fuente("Anton", "Impact, sans-serif");
