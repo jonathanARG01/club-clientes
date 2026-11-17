@@ -1,8 +1,8 @@
 // Tarjeta digital de sellos y puntos para cualquier negocio. Producto de BROTE DIGITAL SpA, independiente de Platovi.
-// Todo lo que nombra la marca sale de aquí: cuando se elija el nombre definitivo, se cambia solo en este archivo
+// Todo lo que nombra la marca sale de aquí: el nombre es "Sellos de Oro" (elegido el 17-11-2026) y se cambia solo en este archivo
 // (y el dominio con NEXT_PUBLIC_SITE_URL).
 
-export const MARCA = process.env.NEXT_PUBLIC_MARCA || "Club de Clientes";
+export const MARCA = process.env.NEXT_PUBLIC_MARCA || "Sellos de Oro";
 export const LEMA = "La tarjeta de sellos y puntos que hace volver a tus clientes";
 export const EMPRESA = "BROTE DIGITAL SpA";
 export const DOMINIO = process.env.NEXT_PUBLIC_SITE_URL?.replace(/^https?:\/\//, "").replace(/\/$/, "") || "localhost:3000";

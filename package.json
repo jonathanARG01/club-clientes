@@ -2,7 +2,7 @@
   "name": "club-de-clientes",
   "version": "0.1.0",
   "private": true,
-  "description": "Club de Clientes: tarjeta digital de sellos y puntos para cualquier negocio (BROTE DIGITAL SpA)",
+  "description": "Sellos de Oro: tarjeta digital de sellos y puntos para cualquier negocio (BROTE DIGITAL SpA)",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
